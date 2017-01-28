@@ -71,7 +71,7 @@ def train(epoch):
 def test():
     avg_psnr = 0
     for batch in testing_data_loader:
-        input, target = Variable(batch[0]), Variable(batch[1])
+        input, target = Variable(batch[0], volatile=True), Variable(batch[1], volatile=True)
         if cuda:
             input = input.cuda()
             target = target.cuda()

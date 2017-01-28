@@ -172,6 +172,7 @@ criterion = nn.BCELoss()
 
 input = torch.FloatTensor(opt.batchSize, 3, opt.imageSize, opt.imageSize)
 noise = torch.FloatTensor(opt.batchSize, nz, 1, 1)
+vol_noise = torch.FloatTensor(opt.batchSize, nz, 1, 1).normal_(0, 1)
 fixed_noise = torch.FloatTensor(opt.batchSize, nz, 1, 1).normal_(0, 1)
 label = torch.FloatTensor(opt.batchSize)
 real_label = 1
@@ -182,12 +183,13 @@ if opt.cuda:
     netG.cuda()
     criterion.cuda()
     input, label = input.cuda(), label.cuda()
-    noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
+    noise, vol_noise, fixed_noise = noise.cuda(), vol_noise.cuda(), fixed_noise.cuda()
 
 input = Variable(input)
 label = Variable(label)
 noise = Variable(noise)
-fixed_noise = Variable(fixed_noise)
+vol_noise = Variable(vol_noise, volatile = True)
+fixed_noise = Variable(fixed_noise, volatile = True)
 
 # setup optimizer
 optimizerD = optim.Adam(netD.parameters(), lr = opt.lr, betas = (opt.beta1, 0.999))
@@ -211,9 +213,10 @@ for epoch in range(opt.niter):
         D_x = output.data.mean()
 
         # train with fake
-        noise.data.resize_(batch_size, nz, 1, 1)
-        noise.data.normal_(0, 1)
-        fake = netG(noise).detach()
+        vol_noise.data.resize_(batch_size, nz, 1, 1)
+        vol_noise.data.normal_(0, 1)
+        fake = netG(vol_noise).detach()
+        fake.volatile = False # keep state going forward in D
         label.data.fill_(fake_label)
         output = netD(fake)
         errD_fake = criterion(output, label)
@@ -226,7 +229,7 @@ for epoch in range(opt.niter):
         # (2) Update G network: maximize log(D(G(z)))
         ###########################
         netG.zero_grad()
-        label.data.fill_(real_label) # fake labels are real for generator cost
+        label.data.resize_(noise.size(0)).fill_(real_label) # fake labels are real for generator cost
         noise.data.normal_(0, 1)
         fake = netG(noise)
         output = netD(fake)
